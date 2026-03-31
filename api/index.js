@@ -12,11 +12,17 @@ const { requireEnv } = require('../config');
 
 const app = express();
 let isConnected = false;
+let startupConfigError = null;
 
-requireEnv('MONGO_URI');
-requireEnv('JWT_SECRET');
-requireEnv('ADMIN_USERNAME');
-requireEnv('ADMIN_PASSWORD');
+try {
+  requireEnv('MONGO_URI');
+  requireEnv('JWT_SECRET');
+  requireEnv('ADMIN_USERNAME');
+  requireEnv('ADMIN_PASSWORD');
+} catch (error) {
+  startupConfigError = error;
+  console.error('Startup configuration error:', error.message);
+}
 
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -26,7 +32,8 @@ if (!fs.existsSync(uploadsDir)) {
 const defaultOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  'https://shanthala.vercel.app'
+  'https://shanthala.vercel.app',
+  'https://www.shanthala.vercel.app'
 ];
 
 const envOrigins = (process.env.CORS_ORIGINS || '')
@@ -35,6 +42,11 @@ const envOrigins = (process.env.CORS_ORIGINS || '')
   .filter(Boolean);
 
 const allowedOrigins = [...new Set([...defaultOrigins, ...envOrigins])];
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  return allowedOrigins.includes(origin);
+}
 
 app.disable('x-powered-by');
 app.use((_req, res, next) => {
@@ -46,11 +58,11 @@ app.use((_req, res, next) => {
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
       return;
     }
-    callback(new Error('Origin not allowed by CORS'));
+    callback(null, false);
   },
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -60,7 +72,11 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(uploadsDir));
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true });
+  res.status(startupConfigError ? 500 : 200).json({
+    ok: !startupConfigError,
+    config: startupConfigError ? startupConfigError.message : 'ok',
+    dbState: mongoose.connection.readyState
+  });
 });
 
 app.use('/api/auth', require('../routes/auth'));
@@ -85,6 +101,10 @@ mongoose.connection.on('error', () => {
 });
 
 app.use(async (req, res, next) => {
+  if (startupConfigError) {
+    return res.status(500).json({ message: startupConfigError.message });
+  }
+
   try {
     await connectToDatabase();
 
