@@ -13,6 +13,7 @@ const { requireEnv } = require('../config');
 const app = express();
 let isConnected = false;
 let startupConfigError = null;
+const isVercel = Boolean(process.env.VERCEL);
 
 try {
   requireEnv('MONGO_URI');
@@ -24,7 +25,9 @@ try {
   console.error('Startup configuration error:', error.message);
 }
 
-const uploadsDir = path.join(__dirname, '../uploads');
+const uploadsDir = isVercel
+  ? path.join('/tmp', 'shanthala-uploads')
+  : path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
