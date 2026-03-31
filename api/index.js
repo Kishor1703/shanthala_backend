@@ -12,6 +12,7 @@ const { requireEnv } = require('../config');
 
 const app = express();
 let isConnected = false;
+let connectPromise = null;
 let startupConfigError = null;
 const isVercel = Boolean(process.env.VERCEL);
 
@@ -86,13 +87,22 @@ app.use('/api/auth', require('../routes/auth'));
 
 const connectToDatabase = async () => {
   if (isConnected && mongoose.connection.readyState === 1) return;
+  if (connectPromise) {
+    await connectPromise;
+    return;
+  }
 
-  await mongoose.connect(process.env.MONGO_URI, {
+  connectPromise = mongoose.connect(process.env.MONGO_URI, {
     serverSelectionTimeoutMS: 5000,
     dbName: process.env.MONGO_DB_NAME || undefined,
   });
 
-  isConnected = true;
+  try {
+    await connectPromise;
+    isConnected = true;
+  } finally {
+    connectPromise = null;
+  }
 };
 
 mongoose.connection.on('disconnected', () => {
