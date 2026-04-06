@@ -5,7 +5,7 @@ const path = require('path');
 const Photo = require('../models/Photo');
 const auth = require('../middleware/auth');
 
-const MAX_FILE_SIZE = 4 * 1024 * 1024;
+const MAX_FILE_SIZE = 15 * 1024 * 1024;
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -28,7 +28,7 @@ const uploadPhoto = (req, res, next) => {
     }
 
     if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-      res.status(413).json({ message: 'Photo must be 4MB or smaller on the deployed site' });
+      res.status(413).json({ message: 'Photo must be 15MB or smaller on the deployed site' });
       return;
     }
 
