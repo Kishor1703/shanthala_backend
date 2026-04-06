@@ -42,26 +42,53 @@ const defaultOrigins = [
 
 const envOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
-  .map((origin) => origin.trim())
+  .map((origin) => normalizeOrigin(origin))
   .filter(Boolean);
 
-const allowedOrigins = [...new Set([...defaultOrigins, ...envOrigins])];
+const allowedOrigins = [...new Set(defaultOrigins.map((origin) => normalizeOrigin(origin)).filter(Boolean).concat(envOrigins))];
+const allowAllOrigins = process.env.CORS_ALLOW_ALL === 'true';
+const vercelPreviewPattern = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
 
-function isAllowedOrigin(origin) {
-  if (!origin) return true;
-  return allowedOrigins.includes(origin);
+function normalizeOrigin(origin) {
+  return String(origin || '').trim().replace(/\/$/, '');
+}
+
+function resolveCorsOrigin(origin) {
+  const normalizedOrigin = normalizeOrigin(origin);
+
+  if (!normalizedOrigin) {
+    return '*';
+  }
+
+  if (allowAllOrigins || allowedOrigins.includes(normalizedOrigin) || vercelPreviewPattern.test(normalizedOrigin)) {
+    return normalizedOrigin;
+  }
+
+  return null;
+}
+
+function applyCorsHeaders(req, res) {
+  const corsOrigin = resolveCorsOrigin(req.headers.origin);
+
+  if (!corsOrigin) {
+    return false;
+  }
+
+  res.setHeader('Access-Control-Allow-Origin', corsOrigin);
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  return true;
 }
 
 const corsOptions = {
   origin(origin, callback) {
-    if (isAllowedOrigin(origin)) {
-      callback(null, true);
-      return;
-    }
-    callback(null, false);
+    const corsOrigin = resolveCorsOrigin(origin);
+    callback(null, corsOrigin || false);
   },
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 204
 };
 
 app.disable('x-powered-by');
@@ -73,18 +100,7 @@ app.use((_req, res, next) => {
 });
 
 app.use((req, res, next) => {
-  const { origin } = req.headers;
-
-  if (isAllowedOrigin(origin)) {
-    if (origin) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Vary', 'Origin');
-    }
-
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  }
-
+  applyCorsHeaders(req, res);
   if (req.method === 'OPTIONS') {
     res.status(204).end();
     return;
@@ -94,6 +110,7 @@ app.use((req, res, next) => {
 });
 
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(uploadsDir));
