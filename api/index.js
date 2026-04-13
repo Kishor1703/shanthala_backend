@@ -174,6 +174,7 @@ app.use(async (req, res, next) => {
 
 app.use('/api/queries', require('../routes/queries'));
 app.use('/api/photos', require('../routes/photos'));
+app.use('/api/blogs', require('../routes/blogs'));
 
 app.use((err, _req, res, _next) => {
   console.error('Unhandled API error:', err);
