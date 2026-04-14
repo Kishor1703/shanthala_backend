@@ -46,6 +46,19 @@ router.get('/', async (_req, res) => {
   }
 });
 
+router.get('/:id', async (req, res) => {
+  try {
+    const blog = await Blog.findById(req.params.id);
+    if (!blog) {
+      return res.status(404).json({ message: 'Blog not found' });
+    }
+
+    res.json(blog);
+  } catch (err) {
+    res.status(500).json({ message: 'Unable to load blog' });
+  }
+});
+
 router.post('/', uploadThumbnail, async (req, res) => {
   try {
     const { title, authorName, authorEmail, excerpt, content } = req.body;
